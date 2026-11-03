@@ -1,9 +1,7 @@
 
 """
 CISC/CMPE 330 - CT-Guided Bone Biopsy Planning
-Part 1: Tool Calibration
-
-File: test_calibration.py
+Tool Calibration
 
 Purpose:
     Validate tool-tip and tool-axis calibration using simulated
@@ -44,7 +42,7 @@ from simulation import (
 
 
 # ---------------------------------------------------------
-# 1. CALIBRATION TEST UTILITIES
+# CALIBRATION TEST UTILITIES
 # ---------------------------------------------------------
 
 def estimate_tip(observations):
@@ -87,7 +85,7 @@ def print_error_statistics(errors, units):
 
 
 # ---------------------------------------------------------
-# 2. PERFECT-DATA TOOL-TIP CALIBRATION
+# PERFECT-DATA TOOL-TIP CALIBRATION
 # ---------------------------------------------------------
 
 def test_tip_calibration():
@@ -127,7 +125,7 @@ def test_tip_calibration():
 
 
 # ---------------------------------------------------------
-# 3. NOISY TOOL-TIP CALIBRATION
+# NOISY TOOL-TIP CALIBRATION
 # ---------------------------------------------------------
 
 def test_tip_calibration_noisy():
@@ -151,7 +149,7 @@ def test_tip_calibration_noisy():
 
 
 # ---------------------------------------------------------
-# 4. PERFECT-DATA TOOL-AXIS CALIBRATION
+# PERFECT-DATA TOOL-AXIS CALIBRATION
 # ---------------------------------------------------------
 
 def test_axis_calibration():
@@ -185,7 +183,7 @@ def test_axis_calibration():
 
 
 # ---------------------------------------------------------
-# 5. NOISY TOOL-AXIS CALIBRATION
+# NOISY TOOL-AXIS CALIBRATION
 # ---------------------------------------------------------
 
 def test_axis_calibration_noisy():
@@ -226,7 +224,7 @@ def test_axis_calibration_noisy():
 
 
 # ---------------------------------------------------------
-# 6. ROTATED-POSE AXIS VALIDATION
+# ROTATED-POSE AXIS VALIDATION
 # ---------------------------------------------------------
 
 def test_axis_rotated_pose():
@@ -285,7 +283,7 @@ def test_axis_rotated_pose():
 
 
 # ---------------------------------------------------------
-# 7. REPEATED NOISY TOOL-TIP CALIBRATION
+# REPEATED NOISY TOOL-TIP CALIBRATION
 # ---------------------------------------------------------
 
 def evaluate_tip_noise(n_trials=200):
@@ -313,7 +311,7 @@ def evaluate_tip_noise(n_trials=200):
 
 
 # ---------------------------------------------------------
-# 8. REPEATED NOISY TOOL-AXIS CALIBRATION
+# REPEATED NOISY TOOL-AXIS CALIBRATION
 # ---------------------------------------------------------
 
 def evaluate_axis_noise(n_trials=200):
@@ -383,7 +381,7 @@ def evaluate_axis_noise(n_trials=200):
 
 
 # ---------------------------------------------------------
-# 9. TOOL-TIP MOTION CONSTRAINTS
+# TOOL-TIP MOTION CONSTRAINTS
 # ---------------------------------------------------------
 
 def test_pivot_angular_coverage():
@@ -413,7 +411,7 @@ def test_pivot_angular_coverage():
 
 
 # ---------------------------------------------------------
-# 10. TOOL-AXIS MOTION CONSTRAINTS
+# TOOL-AXIS MOTION CONSTRAINTS
 # ---------------------------------------------------------
 
 def test_axis_motion_constraints():

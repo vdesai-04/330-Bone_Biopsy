@@ -1,10 +1,7 @@
 
 """
 CISC/CMPE 330 - CT-Guided Bone Biopsy Planning
-Part 1: Tool Calibration
-
-File: calibration.py
-
+Tool Calibration
 Purpose:
     Estimate the biopsy tool's tip position and axis direction
     from optical-tracker marker measurements.
@@ -23,7 +20,7 @@ from geometry import marker_frame, fit_plane_normal
 
 
 # ---------------------------------------------------------
-# 1. TOOL-TIP CALIBRATION
+# TOOL-TIP CALIBRATION
 # ---------------------------------------------------------
 
 def calibrate_tip(rotations, translations):
@@ -60,7 +57,7 @@ def calibrate_tip(rotations, translations):
     A = []
     b = []
 
-    # Construct the stacked system A @ x = b.
+    # Constructing the stacked system A @ x = b.
     for R, t in zip(rotations, translations):
         A.append(np.hstack((R, -np.eye(3))))
         b.append(-t)
@@ -68,13 +65,13 @@ def calibrate_tip(rotations, translations):
     A = np.vstack(A)
     b = np.concatenate(b)
 
-    # Check that the six unknowns can be uniquely estimated.
+    # CHECK that the six unknowns can be uniquely estimated.
     if np.linalg.matrix_rank(A) < 6:
         raise ValueError(
             "Pivot poses do not sufficiently constrain calibration."
         )
 
-    # Solve using the Moore-Penrose least-squares formulation.
+    # Solving using Moore-Penrose least-squares
     solution, _, _, _ = np.linalg.lstsq(
         A, b, rcond=None
     )
@@ -86,7 +83,7 @@ def calibrate_tip(rotations, translations):
 
 
 # ---------------------------------------------------------
-# 2. TOOL-TIP COORDINATE TRANSFORMATION
+# TOOL-TIP COORDINATE TRANSFORMATION
 # ---------------------------------------------------------
 
 def tip_to_model_frame(tip_marker, marker_origin):
@@ -109,7 +106,7 @@ def tip_to_model_frame(tip_marker, marker_origin):
 
 
 # ---------------------------------------------------------
-# 3. TOOL-AXIS CALIBRATION
+# TOOL-AXIS CALIBRATION
 # ---------------------------------------------------------
 
 def calibrate_axis(observations):
@@ -166,7 +163,7 @@ def calibrate_axis(observations):
 
 
 # ---------------------------------------------------------
-# 4. TOOL-AXIS DIRECTION
+# TOOL-AXIS DIRECTION
 # ---------------------------------------------------------
 
 def orient_axis(axis, forward_displacement):
@@ -210,7 +207,7 @@ def orient_axis(axis, forward_displacement):
             "Forward displacement is perpendicular to the tool axis."
         )
 
-    # Choose the sign consistent with the known forward motion.
+    # Choosing the sign consistent with the known forward motion.
     if alignment < 0:
         axis = -axis
 
@@ -218,7 +215,7 @@ def orient_axis(axis, forward_displacement):
 
 
 # ---------------------------------------------------------
-# 5. TOOL-AXIS COORDINATE TRANSFORMATION
+# TOOL-AXIS COORDINATE TRANSFORMATION
 # ---------------------------------------------------------
 
 def axis_to_model_frame(axis_tracker, reference_markers):
@@ -228,7 +225,7 @@ def axis_to_model_frame(axis_tracker, reference_markers):
     The reference markers must correspond to the same
     tool orientation as the estimated tracker-frame axis.
 
-    For the assignment geometry, the marker-frame axes
+    In this assignment, the marker-frame axes
     are aligned with the model-frame axes.
 
     Only rotation is applied because the axis is a

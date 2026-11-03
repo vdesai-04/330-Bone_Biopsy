@@ -1,15 +1,13 @@
 
 """
 CISC/CMPE 330 - CT-Guided Bone Biopsy Planning
-Part 1: Tool Calibration
-
-File: simulation.py
+Tool Calibration
 
 Purpose:
     Define the ground-truth biopsy tool and simulate optical-
     tracker marker observations for tool calibration.
 
-    Three constrained motions are simulated:
+    There are 3 constrained motions simulated:
         1. Pivoting around a stationary needle tip.
         2. Rotating around the tool's longitudinal axis.
         3. Translating forward to identify the axis direction.
@@ -17,8 +15,6 @@ Purpose:
     Independent Gaussian noise can be added to the simulated
     marker positions to evaluate calibration accuracy.
 
-Reference:
-    Assignment Figure 2 - Ground-truth tracked tool model.
 """
 
 import numpy as np
@@ -27,7 +23,7 @@ from geometry import rotation_matrix
 
 
 # ---------------------------------------------------------
-# 1. GROUND-TRUTH TOOL MODEL
+# GROUND-TRUTH TOOL MODEL
 # ---------------------------------------------------------
 
 # Marker positions in the tool model frame, F_mod (mm).
@@ -43,7 +39,7 @@ V_TRUE = np.array([0.0, -1.0, 0.0])
 
 
 # ---------------------------------------------------------
-# 2. PIVOT-MOTION SIMULATION
+# PIVOT-MOTION SIMULATION
 # ---------------------------------------------------------
 
 def simulate_pivot(n_poses=30, seed=42):
@@ -88,7 +84,7 @@ def simulate_pivot(n_poses=30, seed=42):
 
 
 # ---------------------------------------------------------
-# 3. TOOL-AXIS ROTATION SIMULATION
+# TOOL-AXIS ROTATION SIMULATION
 # ---------------------------------------------------------
 
 def simulate_axis_rotation(n_poses=36):
@@ -130,7 +126,7 @@ def simulate_axis_rotation(n_poses=36):
 
 
 # ---------------------------------------------------------
-# 4. KNOWN FORWARD-MOTION SIMULATION
+# KNOWN FORWARD-MOTION SIMULATION
 # ---------------------------------------------------------
 
 def simulate_forward_motion(distance=5.0):
@@ -158,14 +154,14 @@ def simulate_forward_motion(distance=5.0):
     before = MARKERS + t
 
     # Move the tool forward without changing orientation.
-    # V_TRUE is used to generate, not calibrate, the motion.
+    # V_TRUE is used to generate the motion - not calibrate!
     after = before + distance * V_TRUE
 
     return before, after
 
 
 # ---------------------------------------------------------
-# 5. GAUSSIAN MARKER-LOCALIZATION ERROR
+# GAUSSIAN MARKER-LOCALIZATION ERROR
 # ---------------------------------------------------------
 
 def add_marker_noise(observations, sigma=0.358, seed=42):
@@ -198,7 +194,7 @@ def add_marker_noise(observations, sigma=0.358, seed=42):
 
 
 # ---------------------------------------------------------
-# 6. SIMULATION VALIDATION
+# SIMULATION VALIDATION
 # ---------------------------------------------------------
 
 if __name__ == "__main__":

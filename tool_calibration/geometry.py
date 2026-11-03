@@ -1,9 +1,7 @@
 
 """
 CISC/CMPE 330 - CT-Guided Bone Biopsy Planning
-Part 1: Tool Calibration
-
-File: geometry.py
+Tool Calibration
 
 Purpose:
     Provide reusable geometric utilities for tool calibration.
@@ -12,7 +10,7 @@ Purpose:
     three-dimensional rotation matrices, and least-squares
     plane fitting.
 
-    These utilities support the calibration methods presented
+    These utilities support the calibration methods found
     in the course lectures.
 """
 
