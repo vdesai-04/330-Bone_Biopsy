@@ -1,46 +1,78 @@
 
 """
-CISC/CMPE 330 - CT-Guided Bone Biopsy Planning
-Tool Calibration
-Purpose:
-    Estimate the biopsy tool's tip position and axis direction
-    from optical-tracker marker measurements.
+Purpose of this file:
+    Calibrate the biopsy tool's tip position and axis direction
+    using optical-tracker marker observations.
 
-    Tool-tip calibration uses pivot motion and least squares.
-    Tool-axis calibration uses plane fitting during rotation
-    about the needle's longitudinal axis.
+    Tip calibration uses pivot motion and least squares.
+    Axis calibration uses plane fitting during axial rotation.
 
-    The resulting estimates are expressed in the marker-defined
-    tool model frame for comparison with the ground-truth model.
+    We used rigid registration to express both estimates in
+    the tool model frame.
 """
 
 import numpy as np
 
-from geometry import marker_frame, fit_plane_normal
+from geometry import rigid_registration, fit_common_plane_normal
 
 
-# ---------------------------------------------------------
-# TOOL-TIP CALIBRATION
-# ---------------------------------------------------------
+
+# Tool-Pose Estimation
+
+def poses_from_observations(model_markers, observations):
+    """
+    Recover tool poses by registering the known model markers
+    to their corresponding tracker observations.
+    """
+    model_markers = np.asarray(model_markers, dtype=float)
+    observations = np.asarray(observations, dtype=float)
+
+    if model_markers.shape != (3, 3):
+        raise ValueError("Model markers must have shape (3, 3).")
+
+    if observations.ndim != 3 or observations.shape[1:] != (3, 3):
+        raise ValueError(
+            "Observations must have shape (n_poses, 3, 3)."
+        )
+
+    if len(observations) == 0:
+        raise ValueError("At least one observation is required.")
+
+    rotations = []
+    translations = []
+    rms_errors = []
+
+    for markers in observations:
+        R, t, rms = rigid_registration(
+            model_markers,
+            markers,
+            return_rms=True
+        )
+
+        rotations.append(R)
+        translations.append(t)
+        rms_errors.append(rms)
+
+    return (
+        np.asarray(rotations),
+        np.asarray(translations),
+        np.asarray(rms_errors)
+    )
+
+
+
+# Tool Tip Calibration
 
 def calibrate_tip(rotations, translations):
     """
-    Estimate the tool tip using pivot calibration.
+    Estimate the tool-tip position using pivot calibration.
 
     Motion constraint:
-        The tool rotates through varied orientations while
-        its tip remains stationary in the tracker frame.
+        The needle tip remains stationary while the tool
+        rotates through sufficiently varied orientations.
 
-    For each pose:
-        R_i @ p_marker + t_i = p_pivot
-
-    Stacking these equations gives a linear least-squares
-    problem with six unknowns: the marker-frame tip position
-    and the tracker-frame pivot position.
-
-    Returns:
-        tip: Tip position in the marker frame (mm).
-        pivot: Fixed pivot position in the tracker frame (mm).
+    The poses map model coordinates into tracker coordinates,
+    so the estimated tip p is directly in the model frame.
     """
     rotations = np.asarray(rotations, dtype=float)
     translations = np.asarray(translations, dtype=float)
@@ -57,7 +89,7 @@ def calibrate_tip(rotations, translations):
     A = []
     b = []
 
-    # Constructing the stacked system A @ x = b.
+    # Stack the fixed-tip equations from all poses.
     for R, t in zip(rotations, translations):
         A.append(np.hstack((R, -np.eye(3))))
         b.append(-t)
@@ -65,67 +97,51 @@ def calibrate_tip(rotations, translations):
     A = np.vstack(A)
     b = np.concatenate(b)
 
-    # CHECK that the six unknowns can be uniquely estimated.
+    # A full-rank system is needed to estimate all six unknowns.
     if np.linalg.matrix_rank(A) < 6:
         raise ValueError(
-            "Pivot poses do not sufficiently constrain calibration."
+            "Pivot poses do not uniquely constrain calibration."
         )
 
-    # Solving using Moore-Penrose least-squares
+    # The condition number indicates sensitivity to noise.
+    condition_number = np.linalg.cond(A)
+
+    # Solve for the tip and pivot using least squares.
     solution, _, _, _ = np.linalg.lstsq(
         A, b, rcond=None
     )
 
-    tip = solution[:3]
-    pivot = solution[3:]
+    tip_model = solution[:3]
+    pivot_tracker = solution[3:]
 
-    return tip, pivot
+    # Evaluate how well the estimated tip remains stationary.
+    pivot_positions = np.array([
+        R @ tip_model + t
+        for R, t in zip(rotations, translations)
+    ])
 
+    residuals = pivot_positions - pivot_tracker
 
-# ---------------------------------------------------------
-# TOOL-TIP COORDINATE TRANSFORMATION
-# ---------------------------------------------------------
+    pivot_rms = np.sqrt(
+        np.mean(np.sum(residuals**2, axis=1))
+    )
 
-def tip_to_model_frame(tip_marker, marker_origin):
-    """
-    Express the calibrated tip in the tool model frame.
-
-    For the assignment's ground-truth geometry, the marker
-    frame is centred at Marker 1 and its axes are aligned
-    with the tool model frame.
-
-    Therefore, the conversion requires only translation.
-
-    Returns:
-        Tip position in the tool model frame (mm).
-    """
-    tip_marker = np.asarray(tip_marker, dtype=float)
-    marker_origin = np.asarray(marker_origin, dtype=float)
-
-    return tip_marker + marker_origin
+    return tip_model, pivot_tracker, pivot_rms, condition_number
 
 
-# ---------------------------------------------------------
-# TOOL-AXIS CALIBRATION
-# ---------------------------------------------------------
+# Tool Axis Calibration
 
 def calibrate_axis(observations):
     """
-    Estimate the needle-axis orientation using plane fitting.
+    Estimate the tool axis from circular marker trajectories.
 
     Motion constraint:
         The tool rotates around its fixed longitudinal axis.
+        Each marker follows a circular path in a plane
+        perpendicular to the axis.
 
-    Each marker traces a circular trajectory in a plane
-    perpendicular to that axis.
-
-    Method:
-        Fit a plane to each marker's observations using SVD,
-        align the plane normals, and average them.
-
-    Returns:
-        Unit axis vector in tracker coordinates.
-        The positive/negative direction remains ambiguous.
+    A common plane normal is estimated using the trajectories
+    of all three markers, centred independently.
     """
     observations = np.asarray(observations, dtype=float)
 
@@ -135,59 +151,86 @@ def calibrate_axis(observations):
         )
 
     if len(observations) < 3:
-        raise ValueError("At least three poses are required.")
+        raise ValueError("At least three rotation poses are required.")
 
-    normals = []
+    # Group the observations by marker trajectory.
+    trajectories = observations.transpose(1, 0, 2)
 
-    for marker_index in range(3):
-        # Extract one marker's trajectory across all poses.
-        points = observations[:, marker_index, :]
-
-        # The fitted plane normal estimates the rotation axis.
-        normal = fit_plane_normal(points)
-
-        # Resolve relative sign ambiguity between plane normals.
-        if normals and np.dot(normal, normals[0]) < 0:
-            normal = -normal
-
-        normals.append(normal)
-
-    # Average the consistently oriented plane normals.
-    axis = np.mean(normals, axis=0)
-    axis_norm = np.linalg.norm(axis)
-
-    if axis_norm < 1e-10:
-        raise ValueError("Unable to estimate a valid tool axis.")
-
-    return axis / axis_norm
-
-
-# ---------------------------------------------------------
-# TOOL-AXIS DIRECTION
-# ---------------------------------------------------------
-
-def orient_axis(axis, forward_displacement):
-    """
-    Resolve the axis-sign ambiguity using known forward motion.
-
-    Motion constraint:
-        The tool translates along its insertion direction
-        without changing orientation.
-
-    The observed forward marker displacement identifies
-    which of the two possible axis directions points toward
-    the needle tip.
-
-    Returns:
-        Unit axis vector directed toward the needle tip.
-    """
-    axis = np.asarray(axis, dtype=float)
-    forward_displacement = np.asarray(
-        forward_displacement, dtype=float
+    # Fit one common normal to the centred trajectories.
+    axis_tracker, plane_rms = fit_common_plane_normal(
+        trajectories,
+        return_rms=True
     )
 
-    axis_norm = np.linalg.norm(axis)
-    displacement_norm = np.linalg.norm(forward_displacement)
+    return axis_tracker, plane_rms
+
+# Axis Transofrmation into model-frame
+
+def axis_to_model_frame(axis_tracker, rotations):
+    """
+    Convert the tracker-frame axis into the tool model frame.
+
+    Each rotation maps model coordinates into tracker
+    coordinates, so its transpose maps directions back.
+    """
+    axis_tracker = np.asarray(axis_tracker, dtype=float)
+    rotations = np.asarray(rotations, dtype=float)
+
+    if axis_tracker.shape != (3,):
+        raise ValueError("Axis must be a 3D vector.")
+
+    if rotations.ndim != 3 or rotations.shape[1:] != (3, 3):
+        raise ValueError("Rotations must have shape (n, 3, 3).")
+
+    if len(rotations) == 0:
+        raise ValueError("At least one rotation is required.")
+
+    axis_norm = np.linalg.norm(axis_tracker)
+
+    if axis_norm < 1e-10:
+        raise ValueError("Estimated axis must be nonzero.")
+
+    axis_tracker = axis_tracker / axis_norm
+
+    # Transform the axis into model coordinates using each pose.
+    model_axes = np.array([
+        R.T @ axis_tracker
+        for R in rotations
+    ])
+
+    # Average and normalize the model-frame estimates.
+    axis_model = np.mean(model_axes, axis=0)
+    model_norm = np.linalg.norm(axis_model)
+
+    if model_norm < 1e-10:
+        raise ValueError("Unable to recover a model-frame axis.")
+
+    return axis_model / model_norm
+
+
+# Axis Direction Calibration
+
+def orient_axis(axis_model, forward_displacement_model):
+    """
+    Resolve the axis sign using a known forward translation.
+
+    Motion constraint:
+        The tool moves along the insertion direction without
+        changing its orientation.
+
+    Both vectors must be expressed in the model frame.
+    """
+    axis_model = np.asarray(axis_model, dtype=float)
+    displacement = np.asarray(
+        forward_displacement_model,
+        dtype=float
+    )
+
+    if axis_model.shape != (3,) or displacement.shape != (3,):
+        raise ValueError("Expected two 3D vectors.")
+
+    axis_norm = np.linalg.norm(axis_model)
+    displacement_norm = np.linalg.norm(displacement)
 
     if axis_norm < 1e-10:
         raise ValueError("Estimated axis must be nonzero.")
@@ -195,55 +238,116 @@ def orient_axis(axis, forward_displacement):
     if displacement_norm < 1e-10:
         raise ValueError("Forward displacement must be nonzero.")
 
-    axis = axis / axis_norm
+    axis_model = axis_model / axis_norm
+    displacement = displacement / displacement_norm
 
-    # The forward motion must have a component along the axis.
-    alignment = np.dot(
-        axis, forward_displacement / displacement_norm
-    )
+    # Check that forward motion is sufficiently aligned
+    # with the estimated tool axis.
+    alignment = np.dot(axis_model, displacement)
 
-    if abs(alignment) < 1e-8:
+    if abs(alignment) < 1e-3:
         raise ValueError(
-            "Forward displacement is perpendicular to the tool axis."
+            "Forward motion is nearly perpendicular to the tool axis."
         )
 
-    # Choosing the sign consistent with the known forward motion.
     if alignment < 0:
-        axis = -axis
+        axis_model = -axis_model
 
-    return axis
+    return axis_model
 
+# Complete Tool Calibration
 
-# ---------------------------------------------------------
-# TOOL-AXIS COORDINATE TRANSFORMATION
-# ---------------------------------------------------------
-
-def axis_to_model_frame(axis_tracker, reference_markers):
+def calibrate_tool(
+    model_markers,
+    pivot_observations,
+    axis_observations,
+    forward_before,
+    forward_after
+):
     """
-    Express a tracker-frame axis in the tool model frame.
-
-    The reference markers must correspond to the same
-    tool orientation as the estimated tracker-frame axis.
-
-    In this assignment, the marker-frame axes
-    are aligned with the model-frame axes.
-
-    Only rotation is applied because the axis is a
-    direction vector, not a position.
-
-    Returns:
-        Unit axis direction in the tool model frame.
+    Calibrate the tool tip and directed axis from marker data.
     """
-    R, _ = marker_frame(reference_markers)
+    model_markers = np.asarray(model_markers, dtype=float)
+    forward_before = np.asarray(forward_before, dtype=float)
+    forward_after = np.asarray(forward_after, dtype=float)
 
-    axis_tracker = np.asarray(axis_tracker, dtype=float)
+    if model_markers.shape != (3, 3):
+        raise ValueError("Model markers must have shape (3, 3).")
 
-    # Transform the direction from tracker to marker/model frame.
-    axis_model = R.T @ axis_tracker
+    if forward_before.shape != (3, 3):
+        raise ValueError("Forward-before markers must have shape (3, 3).")
 
-    axis_norm = np.linalg.norm(axis_model)
+    if forward_after.shape != (3, 3):
+        raise ValueError("Forward-after markers must have shape (3, 3).")
 
-    if axis_norm < 1e-10:
-        raise ValueError("Transformed axis must be nonzero.")
+    # Tip calibration
 
-    return axis_model / axis_norm
+    pivot_R, pivot_t, pivot_registration_rms = (
+        poses_from_observations(
+            model_markers,
+            pivot_observations
+        )
+    )
+
+    tip_model, pivot_tracker, pivot_rms, pivot_condition = (
+        calibrate_tip(pivot_R, pivot_t)
+    )
+
+    # Axis Calibration
+    axis_R, _, axis_registration_rms = (
+        poses_from_observations(
+            model_markers,
+            axis_observations
+        )
+    )
+
+    axis_tracker, plane_rms = calibrate_axis(
+        axis_observations
+    )
+
+    axis_model = axis_to_model_frame(
+        axis_tracker,
+        axis_R
+    )
+
+    # Register the reference pose before forward translation.
+    R_before, _ = rigid_registration(
+        model_markers,
+        forward_before
+    )
+
+    # Estimate the tracker-frame forward displacement.
+    displacement_tracker = (
+        np.mean(forward_after, axis=0)
+        - np.mean(forward_before, axis=0)
+    )
+
+    # Convert the displacement into model coordinates.
+    displacement_model = R_before.T @ displacement_tracker
+
+    directed_axis_model = orient_axis(
+        axis_model,
+        displacement_model
+    )
+
+    return {
+        "tip_model": tip_model,
+        "axis_model": directed_axis_model,
+        "axis_tracker": axis_tracker,
+        "pivot_tracker": pivot_tracker,
+        "pivot_rms": pivot_rms,
+        "pivot_condition": pivot_condition,
+        "plane_rms": plane_rms,
+
+        # Average registration residuals.
+        "pivot_registration_rms": np.mean(
+            pivot_registration_rms
+        ),
+        "axis_registration_rms": np.mean(
+            axis_registration_rms
+        ),
+
+        # Per-pose residuals for additional diagnostics.
+        "pivot_registration_rms_per_pose": pivot_registration_rms,
+        "axis_registration_rms_per_pose": axis_registration_rms
+    }
