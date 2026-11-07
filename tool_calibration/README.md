@@ -22,7 +22,7 @@ We simulated both motions in Python and tested the code with perfect marker meas
 
 The first noisy row combines results from separate tip and axis calibration experiments. The final row comes from testing the complete calibration pipeline together.
 
-The unrestricted pivot is a best-case setup. A hand-held needle could not move that freely, so the 30° row is a more realistic example of restricted motion. Section 5 shows how fast the tip error grows as the pivot range shrinks. The axis results use 36 poses averaged in the model frame (Section 4).
+The unrestricted pivot is a best-case setup. A hand-held needle could not move that freely, so the 30° row is a more realistic example of restricted motion. The section "Effects on Pivot Motion on Tip Accuracy" show how fast the tip error grows as the pivot range shrinks. The axis results use 36 poses averaged in the model frame.
 
 ## Files
 
@@ -31,7 +31,7 @@ The unrestricted pivot is a best-case setup. A hand-held needle could not move t
 - `simulation.py`: simulated marker data and measurement noise.
 - `test_calibration.py`: all tests and comparisons.
 
-## 1. Tool Geometry
+## Tool Geometry
 
 Marker positions in the tool model frame:
 
@@ -51,7 +51,7 @@ For every observed pose we estimated the tool's rotation `R` and translation `t`
 
  SVD-based least squares registration was used because it uses all three markers. We also kept the simpler marker-frame method (building a frame from M1, M2 and M3) so the two could be compared under noise. 
 
-## 2. Calibration Motions and Constraints
+## Calibration Motions and Constraints
 
 | Motion | Constraint | What it gives |
 | --- | --- | --- |
@@ -84,7 +84,7 @@ The fitted axis is in the tracker frame and has no sign. To express it in the mo
 
 The sign comes from the forward motion, as described above.
 
-## 3. Adding Measurement Noise
+## Adding Measurement Noise
 
 We added independent Gaussian noise with standard deviation `sigma` to every marker coordinate.
 
@@ -102,7 +102,7 @@ This was then checked with 100,000 simulated errors:
 | 95th percentile of 3D error | 0.9987 mm |
 | Errors below 1 mm | 95.0450% |
 
-## 4. Calibration Results
+## Calibration Results
 
 ### Perfect Measurements
 
@@ -131,7 +131,7 @@ SVD was a bit better. With three markers, there are 9 coordinates and 6 pose par
 | Marker-frame registration | 0.503 mm | 0.819 mm |
 | SVD registration | 0.414 mm | 0.762 mm |
 
-**These results use a very wide pivot.** The needle directions were up to about 174° apart, so this is an optimistic setup. The restricted pivots in Sections 5 and 6 give much larger errors, so 0.414 mm should not be read as the accuracy for every kind of calibration motion.
+**These results use a very wide pivot.** The needle directions were up to about 174° apart, so this is an optimistic setup. The restricted pivots in later sections give much larger errors, so 0.414 mm should not be read as the accuracy for every kind of calibration motion.
 
 The average pivot RMS was about 2.09 mm, much larger than the tip error. They measure different things. The pivot RMS is how well the noisy poses agree on one stationary point. The markers are about 20 mm from the tip, so a small rotation error moves the extrapolated tip by a couple of millimetres in each pose. The least squares fit over 30 poses averages this down, which is why the final tip error is smaller.
 
@@ -149,7 +149,7 @@ The original pipeline fitted a plane for each marker, averaged the normals, and 
 
 Most of the improvement came from averaging over the 36 poses. A single pose carries the registration noise of that one measurement, and averaging reduces it. The common plane fit also improved the tracker-frame axis error from 1.37° to 0.67°.
 
-## 5. Effect of Pivot Motion on Tip Accuracy
+## Effect of Pivot Motion on Tip Accuracy
 
 We limited the maximum tilt of the needle and repeated the noisy calibration 100 times per setting. Angular coverage here means the largest angle between any two needle directions in the pivot.
 
@@ -166,7 +166,7 @@ Tip accuracy gets much worse when the tool can only move through a small range o
 
 The 180° row and the earlier full-sphere experiment (0.414 mm) used different random pose sets, so they are separate results even though they are close.
 
-## 6. Complete Calibration Test
+## Complete Calibration Test
 
 We ran the whole pipeline with the tip at (3, -2, 5) mm and the pivot limited to a 30° cone. This 30° cone is an example of restricted motion that we chose. We ran 200 trials with the same motions and new noise each time, then 100 trials where the motions were redrawn each time.
 
@@ -186,14 +186,14 @@ The tip error was split into 2: a part along the needle and a part sideways.
 | Along the axis (absolute) | 1.97 mm | 2.04 mm |
 | Perpendicular to the axis | 0.34 mm | 0.35 mm |
 
-At the 30° limit, most of the error is along the needle. That fits the sweep in Section 5, where a narrow pivot gives larger tip errors. 
+At the 30° limit, most of the error is along the needle. That fits the sweep in the section "Effects on Pivot Motion on Tip Accuracy", where a narrow pivot gives larger tip errors. 
 For the axis error we also computed the sideways shift over an assumed 100 mm insertion. The mean was 1.49 mm for fixed motions and 1.42 mm for redrawn motions. This is only a geometric illustration of the axis error alone. It is not a clinical targeting error, and the tip error is reported separately.
 
 ### Test Bounds
 
 The noisy end-to-end tests assert a mean tip error under 3.5 mm and a mean axis error under 1.5°. I set these after running the simulation, at roughly 1.5 to 2 times the measured means, so they work as regression checks. They are not clinical requirements.
 
-## 7. Limitations
+## Limitations
 
 - The noise is independent and the same in every direction. Real trackers are usually less accurate in some directions, often along the viewing depth.
 - The motions are ideal. The tip does not drift during the pivot and the tool does not wobble during the spin.
